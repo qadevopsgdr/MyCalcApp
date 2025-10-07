@@ -29,14 +29,14 @@ jobs:
 
       # 4. Build Docker image
       - name: Build Docker image
-        run: docker build -t gh-calc .
+        run: docker build -t calc-gh .
 
       # 5. Tag Docker image for ECR
       - name: Tag Docker image
         run: |
-          docker tag gh-calc:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/gh-calc:latest
+          docker tag calc-gh:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/gh-calc:latest
 
       # 6. Push Docker image to ECR
       - name: Push Docker image
         run: |
-          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/gh-calc:latest
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
