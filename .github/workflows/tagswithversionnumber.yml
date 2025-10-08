@@ -1,0 +1,59 @@
+name: Calc App GitHub Actions
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout the repo
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # 2. Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.REGION }}
+
+      # 3. Login to Amazon ECR
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ${{ secrets.REGION }} \
+          | docker login --username AWS --password-stdin \
+            ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com
+
+      # 4. Set incremental version tag
+      - name: Set image tag
+        id: set-tag
+        run: |
+          IMAGE_TAG="v${GITHUB_RUN_NUMBER}"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        shell: bash
+
+      # 5. Build & tag Docker image
+      - name: Build & tag Docker image
+        run: |
+          docker build -t calc-gh:$IMAGE_TAG .
+          docker tag calc-gh:$IMAGE_TAG \
+            ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:$IMAGE_TAG
+          docker tag calc-gh:$IMAGE_TAG \
+            ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
+        shell: bash
+
+      # 6. Push Docker image to ECR
+      - name: Push Docker image to ECR
+        run: |
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:$IMAGE_TAG
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
+        shell: bash
+
+      # 7. (Optional) Display pushed tags
+      - name: Show pushed tags
+        run: echo "✅ Pushed tags:$IMAGE_TAG and latest"
