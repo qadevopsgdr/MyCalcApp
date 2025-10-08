@@ -22,25 +22,29 @@ jobs:
 
       - name: Login to Amazon ECR
         run: |
-          aws ecr get-login-password --region ${{ secrets.REGION }} | \
-          docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com
+          aws ecr get-login-password --region ${{ secrets.REGION }} \
+          | docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com
 
       - name: Set image tag
-        id: vars
+        id: set-tag
         run: |
-          IMAGE_TAG="v$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+          IMAGE_TAG="v$(date +%Y%m%d)-${SHORT_SHA}"
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        shell: bash
 
-      - name: Build Docker image
+      - name: Build & tag Docker image
         run: |
-          docker build -t calc-gh:${{ env.IMAGE_TAG }} .
-          docker tag calc-gh:${{ env.IMAGE_TAG }} ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:${{ env.IMAGE_TAG }}
-          docker tag calc-gh:${{ env.IMAGE_TAG }} ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
+          docker build -t calc-gh:$IMAGE_TAG .
+          docker tag calc-gh:$IMAGE_TAG ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:$IMAGE_TAG
+          docker tag calc-gh:$IMAGE_TAG ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
+        shell: bash
 
-      - name: Push Docker image
+      - name: Push Docker image to ECR
         run: |
-          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:${{ env.IMAGE_TAG }}
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:$IMAGE_TAG
           docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
+        shell: bash
 
       - name: Show pushed tags
-        run: echo "Pushed tags: latest and ${{ env.IMAGE_TAG }}"
+        run: echo "Pushed tags:latest and $IMAGE_TAG"
