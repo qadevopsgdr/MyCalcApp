@@ -1,4 +1,4 @@
-name: Calc App GitHub Actions
+name: Build and Push with Auto Tag
 
 on:
   push:
@@ -10,9 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
+      # 1️⃣ Checkout the repo
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       # 2️⃣ Configure AWS credentials
       - name: Configure AWS credentials
@@ -29,7 +29,7 @@ jobs:
           | docker login --username AWS --password-stdin \
             ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com
 
-      # 4️⃣ Determine next version tag automatically
+      # 4️⃣ Determine next version tag
       - name: Determine next version tag
         id: get-tag
         run: |
@@ -37,17 +37,17 @@ jobs:
           ACCOUNT_ID=${{ secrets.ACCOUNT_ID }}
           REGION=${{ secrets.REGION }}
 
-          # Get latest tag from ECR (filter v* only)
+          # Get latest tag (v1, v2, v3...)
           LAST_TAG=$(aws ecr list-images \
-            --repository-name $REPO_NAME \
-            --region $REGION \
+            --repository-name "$REPO_NAME" \
+            --region "$REGION" \
             --query 'imageIds[?starts_with(imageTag, `v`)].imageTag' \
             --output text | tr '\t' '\n' | sort -V | tail -n 1)
 
           if [ -z "$LAST_TAG" ]; then
             NEW_TAG="v1"
           else
-            NUM=$(echo $LAST_TAG | tr -d 'v')
+            NUM=$(echo "$LAST_TAG" | tr -d 'v')
             NEXT=$((NUM + 1))
             NEW_TAG="v${NEXT}"
           fi
@@ -65,5 +65,12 @@ jobs:
           docker tag calc-gh:$NEW_TAG \
             ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
 
-      # 6️⃣ Push Docker image to ECR
-      - name: Push Docker image to ECR
+      # 6️⃣ Push Docker image
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:$NEW_TAG
+          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
+
+      # 7️⃣ Show final result
+      - name: Show pushed tags
+        run: echo "✅ Successfully pushed tags:$NEW_TAG and latest"
