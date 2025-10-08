@@ -72,7 +72,7 @@ jobs:
   # SONARQUBE JOB
   # ----------------------------
   sonar_job:
-    needs: build-and-push
+    needs: Trivy
     runs-on: ubuntu-latest
 
     steps:
