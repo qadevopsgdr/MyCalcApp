@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout the repo
+      # 1️⃣ Checkout code
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # 2. Configure AWS credentials
+      # 2️⃣ Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -22,38 +22,48 @@ jobs:
           aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.REGION }}
 
-      # 3. Login to Amazon ECR
+      # 3️⃣ Login to Amazon ECR
       - name: Login to Amazon ECR
         run: |
           aws ecr get-login-password --region ${{ secrets.REGION }} \
           | docker login --username AWS --password-stdin \
             ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com
 
-      # 4. Set incremental version tag
-      - name: Set image tag
-        id: set-tag
+      # 4️⃣ Determine next version tag automatically
+      - name: Determine next version tag
+        id: get-tag
         run: |
-          IMAGE_TAG="v${GITHUB_RUN_NUMBER}"
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-        shell: bash
+          REPO_NAME="calc-gh"
+          ACCOUNT_ID=${{ secrets.ACCOUNT_ID }}
+          REGION=${{ secrets.REGION }}
 
-      # 5. Build & tag Docker image
-      - name: Build & tag Docker image
+          # Get latest tag from ECR (filter v* only)
+          LAST_TAG=$(aws ecr list-images \
+            --repository-name $REPO_NAME \
+            --region $REGION \
+            --query 'imageIds[?starts_with(imageTag, `v`)].imageTag' \
+            --output text | tr '\t' '\n' | sort -V | tail -n 1)
+
+          if [ -z "$LAST_TAG" ]; then
+            NEW_TAG="v1"
+          else
+            NUM=$(echo $LAST_TAG | tr -d 'v')
+            NEXT=$((NUM + 1))
+            NEW_TAG="v${NEXT}"
+          fi
+
+          echo "Detected last tag: ${LAST_TAG:-none}"
+          echo "Next tag: $NEW_TAG"
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+
+      # 5️⃣ Build Docker image
+      - name: Build Docker image
         run: |
-          docker build -t calc-gh:$IMAGE_TAG .
-          docker tag calc-gh:$IMAGE_TAG \
-            ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:$IMAGE_TAG
-          docker tag calc-gh:$IMAGE_TAG \
+          docker build -t calc-gh:$NEW_TAG .
+          docker tag calc-gh:$NEW_TAG \
+            ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:$NEW_TAG
+          docker tag calc-gh:$NEW_TAG \
             ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
-        shell: bash
 
-      # 6. Push Docker image to ECR
+      # 6️⃣ Push Docker image to ECR
       - name: Push Docker image to ECR
-        run: |
-          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:$IMAGE_TAG
-          docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
-        shell: bash
-
-      # 7. (Optional) Display pushed tags
-      - name: Show pushed tags
-        run: echo "✅ Pushed tags:$IMAGE_TAG and latest"
