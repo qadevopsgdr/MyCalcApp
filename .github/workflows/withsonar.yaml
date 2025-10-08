@@ -43,6 +43,8 @@ jobs:
                   docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
 
     sonar_job:
+        needs: build-and-push
+
         runs-on: ubuntu-latest
 
         steps:
