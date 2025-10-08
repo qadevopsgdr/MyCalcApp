@@ -1,85 +1,88 @@
 name: Calc App GitHub Actions
 
 on:
-    push:
-        branches:
-            - main
+  push:
+    branches:
+      - main
 
 jobs:
-    build-and-push:
-        runs-on: ubuntu-latest
+  build-and-push:
+    runs-on: ubuntu-latest
 
-        steps:
-            # 1. Checkout the repo
-            - name: Checkout code
-              uses: actions/checkout@v5
+    steps:
+      # 1. Checkout the repo
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-            # 2. Configure AWS credentials
-            - name: Configure AWS credentials
-              uses: aws-actions/configure-aws-credentials@v2
-              with:
-                  aws-access-key-id: ${{ secrets.ACCESS_KEY }}
-                  aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
-                  aws-region: ${{ secrets.REGION }}
+      # 2. Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.REGION }}
 
-            # 3. Login to ECR
-            - name: Login to Amazon ECR
-              run: |
-                  # aws ecr get-login-password --region ${{ secrets.REGION }} | docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com
-                   aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 557690603016.dkr.ecr.ap-south-1.amazonaws.com
-            # 4. Build Docker image
-            - name: Build Docker image
-              #   run: docker build -t calc-gh .
-              run: docker build -t calc-gh .
+      # 3. Login to ECR
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 557690603016.dkr.ecr.ap-south-1.amazonaws.com
 
-            # 5. Tag Docker image for ECR
-            - name: Tag Docker image
-              run: |
-                  # docker tag calc-gh:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/gh-calc:latest
-                   docker tag calc-gh:latest 557690603016.dkr.ecr.ap-south-1.amazonaws.com/calc-gh:latest
-            # 6. Push Docker image to ECR
-            - name: Push Docker image
-              run: |
-                  docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
+      # 4. Build Docker image
+      - name: Build Docker image
+        run: docker build -t calc-gh .
 
+      # 5. Tag Docker image
+      - name: Tag Docker image
+        run: docker tag calc-gh:latest 557690603016.dkr.ecr.ap-south-1.amazonaws.com/calc-gh:latest
 
-    Trivy:
-      needs: build-and-push
-      runs-on: ubuntu-latest
-      steps:
-        - run: |
-           sudo apt-get install wget apt-transport-https gnupg lsb-release
-           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-           echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
-           sudo apt-get update
-           sudo apt-get install trivy
-        
-           - name: Trivy FS Scan
-             run: trivy fs --format table -o fs-report.json .
+      # 6. Push Docker image
+      - name: Push Docker image
+        run: docker push 557690603016.dkr.ecr.ap-south-1.amazonaws.com/calc-gh:latest
 
-           - name: Gitleaks Installation
-             run: sudo apt install gitleaks -y
-           - name: Gitleaks Code Scan
-             run: gitleaks detect source . -r gitleaks-report.json -f json
+  # ----------------------------
+  # TRIVY & GITLEAKS SCANS
+  # ----------------------------
+  Trivy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
 
-    
-    
-    
-    
-    sonar_job:
-        needs: build-and-push
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-        runs-on: ubuntu-latest
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
 
-        steps:
-            # 1. Checkout the repo
-            - name: Checkout
-              uses: actions/checkout@v4
-              with:
-                  # Disabling shallow clones is recommended for improving the relevancy of reporting
-                  fetch-depth: 0
-            - name: SonarQube Scan
-              uses: SonarSource/sonarqube-scan-action@v6.0.0 # Ex: v4.1.0 or sha1, See the latest version at https://github.com/marketplace/actions/official-sonarqube-scan
-              env:
-                  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-                  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      - name: Run Trivy FS Scan
+        run: trivy fs --format table -o fs-report.json .
+
+      - name: Install Gitleaks
+        run: sudo apt-get install -y gitleaks
+
+      - name: Run Gitleaks Scan
+        run: gitleaks detect -s . -r gitleaks-report.json -f json
+
+  # ----------------------------
+  # SONARQUBE JOB
+  # ----------------------------
+  sonar_job:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Recommended for better analysis accuracy
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
