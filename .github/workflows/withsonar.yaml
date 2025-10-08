@@ -45,7 +45,7 @@ jobs:
 
     Trivy:
       runs-on: ubuntu-latest
-       steps:
+      steps:
         - run: |
            sudo apt-get install wget apt-transport-https gnupg lsb-release
            wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
