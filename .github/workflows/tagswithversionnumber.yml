@@ -73,4 +73,4 @@ jobs:
 
       # 7️⃣ Show final result
       - name: Show pushed tags
-        run: echo "✅ Successfully pushed tags:$NEW_TAG and latest"
+        run: echo "✅ Successfully pushed tags:$NEW_TAG and latest... DR..."
