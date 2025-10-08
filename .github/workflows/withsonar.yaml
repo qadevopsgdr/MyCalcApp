@@ -44,6 +44,7 @@ jobs:
 
 
     Trivy:
+      needs: build-and-push
       runs-on: ubuntu-latest
       steps:
         - run: |
