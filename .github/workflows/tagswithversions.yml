@@ -10,11 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout the repo
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # 2. Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -22,32 +20,27 @@ jobs:
           aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.REGION }}
 
-      # 3. Login to Amazon ECR
       - name: Login to Amazon ECR
         run: |
-          aws ecr get-login-password --region ${{ secrets.REGION }} \
-          | docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com
+          aws ecr get-login-password --region ${{ secrets.REGION }} | \
+          docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com
 
-      # 4. Set Image Tag (date + short commit)
       - name: Set image tag
         id: vars
         run: |
           IMAGE_TAG="v$(date +%Y%m%d)-${GITHUB_SHA::7}"
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
-      # 5. Build Docker image
       - name: Build Docker image
         run: |
           docker build -t calc-gh:${{ env.IMAGE_TAG }} .
           docker tag calc-gh:${{ env.IMAGE_TAG }} ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:${{ env.IMAGE_TAG }}
           docker tag calc-gh:${{ env.IMAGE_TAG }} ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
 
-      # 6. Push Docker image to ECR
       - name: Push Docker image
         run: |
           docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:${{ env.IMAGE_TAG }}
           docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
 
-      # 7. (Optional) Print pushed image tags
       - name: Show pushed tags
         run: echo "Pushed tags: latest and ${{ env.IMAGE_TAG }}"
