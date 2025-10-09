@@ -121,15 +121,24 @@ jobs:
             --task-definition Actions-Calc-TD \
             --query taskDefinition > taskdef.json
 
-      # Update task definition image
-      - name: Update task definition with new image
-        id: taskdef
+      # Clean up unneeded fields and update the image
+      - name: Prepare new task definition JSON
+        id: prepare-task
         run: |
           IMAGE_URI=557690603016.dkr.ecr.ap-south-1.amazonaws.com/calc-gh:${{ github.run_number }}
-          NEW_TASK_DEF=$(jq --arg IMAGE "$IMAGE_URI" '.containerDefinitions[0].image=$IMAGE' taskdef.json)
-          echo "$NEW_TASK_DEF" > new-taskdef.json
+          
+          # Remove read-only fields and update image
+          jq 'del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            ) | .containerDefinitions[0].image="'$IMAGE_URI'"' taskdef.json > new-taskdef.json
 
-      # Register new task definition revision
+      # Register new task definition
       - name: Register new task definition
         id: register-task
         run: |
@@ -147,3 +156,4 @@ jobs:
             --service Actions-Calc-TD-service-f69zyief \
             --task-definition $TASK_DEF_ARN \
             --force-new-deployment
+
