@@ -1,0 +1,187 @@
+name: Calc App GitHub Actions
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # ----------------------------
+  # BUILD & PUSH IMAGE TO ECR
+  # ----------------------------
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5   # ✅ fixed typo
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.REGION }}
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 557690603016.dkr.ecr.ap-south-1.amazonaws.com
+
+      - name: Build Docker image
+        run: docker build -t calc-gh .
+
+      - name: Tag Docker image
+        id: tag
+        run: |
+          IMAGE_TAG=${{ github.run_number }}
+          ECR_URI=557690603016.dkr.ecr.ap-south-1.amazonaws.com/calc-gh
+          docker tag calc-gh:latest $ECR_URI:$IMAGE_TAG
+          docker tag calc-gh:latest $ECR_URI:latest
+          echo "IMAGE_URI=$ECR_URI:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Push Docker images
+        run: |
+          ECR_URI=557690603016.dkr.ecr.ap-south-1.amazonaws.com/calc-gh
+          docker push $ECR_URI:latest
+          docker push $ECR_URI:${{ github.run_number }}
+
+  # ----------------------------
+  # TRIVY & GITLEAKS SCANS
+  # ----------------------------
+  Trivy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Run Trivy FS Scan
+        run: trivy fs --format table -o fs-report.json .
+
+      - name: Install Gitleaks
+        run: sudo apt-get install -y gitleaks
+
+      - name: Run Gitleaks Scan
+        run: gitleaks detect -s . -r gitleaks-report.json -f json
+
+  # ----------------------------
+  # SONARQUBE JOB
+  # ----------------------------
+  sonar_job:
+    needs: Trivy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  # ----------------------------
+  # ECS DEPLOYMENT JOB
+  # ----------------------------
+  deploy:
+    needs: sonar_job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.REGION }}
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition Actions-Calc-TD \
+            --query taskDefinition > taskdef.json
+
+      - name: Prepare new task definition JSON
+        id: prepare-task
+        run: |
+          IMAGE_URI=557690603016.dkr.ecr.ap-south-1.amazonaws.com/calc-gh:${{ github.run_number }}
+          jq 'del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            ) | .containerDefinitions[0].image="'$IMAGE_URI'"' taskdef.json > new-taskdef.json
+
+      - name: Register new task definition
+        id: register-task
+        run: |
+          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://new-taskdef.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "TASK_DEF_ARN=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV
+
+      - name: Deploy updated task definition to ECS service
+        run: |
+          aws ecs update-service \
+            --cluster Actions-Calc-Cluster \
+            --service Actions-Calc-TD-service-f69zyief \
+            --task-definition $TASK_DEF_ARN \
+            --force-new-deployment
+
+  # ----------------------------
+  # EMAIL NOTIFICATION JOB
+  # ----------------------------
+  notify:
+    runs-on: ubuntu-latest
+    if: failure()   # ✅ Run only if any previous job fails
+    needs: [build-and-push, Trivy, sonar_job, deploy]
+    steps:
+      - name: Get failure details
+        run: |
+          echo "Workflow failed in job: ${{ github.job }}" > error_info.txt
+          echo "Repository: ${{ github.repository }}" >> error_info.txt
+          echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> error_info.txt
+          echo "" >> error_info.txt
+          echo "Error summary (from logs):" >> error_info.txt
+          # Pull last 50 lines of log to capture error context
+          tail -n 50 $GITHUB_STEP_SUMMARY >> error_info.txt || echo "No logs found" >> error_info.txt
+
+      - name: Send email notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "🚨 GitHub Actions Failed: ${{ github.repository }}"
+          to: "qadevopsgdr@gmail.com"
+          from: "GitHub Actions <${{ secrets.MAIL_USERNAME }}>"
+          body: |
+            Hi Durga,
+
+            The workflow **${{ github.workflow }}** has failed in repository **${{ github.repository }}**.
+
+            You can check the failure details at:
+            🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Error summary:
+            ```
+            $(cat error_info.txt)
+            ```
+
+            Regards,
+            GitHub Actions
