@@ -10,7 +10,7 @@ jobs:
   # BUILD & PUSH IMAGE TO ECR
   # ----------------------------
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latestt
 
     steps:
       # 1. Checkout the repo
