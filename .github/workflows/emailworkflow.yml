@@ -168,7 +168,7 @@ jobs:
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: "🚨 GitHub Actions Failed: ${{ github.repository }}"
-          to: "qadevopsgdr@gmail.com"
+          to: "durga.surya208@gmail.com"
           from: "GitHub Actions <${{ secrets.MAIL_USERNAME }}>"
           body: |
             Hi Durga,
