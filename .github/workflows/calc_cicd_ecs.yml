@@ -10,12 +10,12 @@ jobs:
   # BUILD & PUSH IMAGE TO ECR
   # ----------------------------
   build-and-push:
-    runs-on: ubuntu-latestt
+    runs-on: ubuntu-latest
 
     steps:
       # 1. Checkout the repo
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5as
 
       # 2. Configure AWS credentials
       - name: Configure AWS credentials
