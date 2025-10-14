@@ -11,7 +11,6 @@ jobs:
   # ----------------------------
   build-and-push:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v5   # ✅ fixed typo
@@ -143,24 +142,13 @@ jobs:
             --force-new-deployment
 
   # ----------------------------
-  # EMAIL NOTIFICATION JOB
+  # EMAIL NOTIFICATION JOB (on failure)
   # ----------------------------
   notify:
     runs-on: ubuntu-latest
-    if: failure()   # ✅ Run only if any previous job fails
-    needs: [build-and-push, Trivy, sonar_job, deploy]
+    if: ${{ failure() }}
     steps:
-      - name: Get failure details
-        run: |
-          echo "Workflow failed in job: ${{ github.job }}" > error_info.txt
-          echo "Repository: ${{ github.repository }}" >> error_info.txt
-          echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> error_info.txt
-          echo "" >> error_info.txt
-          echo "Error summary (from logs):" >> error_info.txt
-          # Pull last 50 lines of log to capture error context
-          tail -n 50 $GITHUB_STEP_SUMMARY >> error_info.txt || echo "No logs found" >> error_info.txt
-
-      - name: Send email notification
+      - name: Send failure email
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -168,20 +156,20 @@ jobs:
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: "🚨 GitHub Actions Failed: ${{ github.repository }}"
-          to: "newsmile3786@gmail.com"
+          to: "durgarao.ganisetti@techvedika.com"
           from: "GitHub Actions <${{ secrets.MAIL_USERNAME }}>"
           body: |
-            Hi Durga,
+            Hello,
 
-            The workflow **${{ github.workflow }}** has failed in repository **${{ github.repository }}**.
+            The workflow **${{ github.workflow }}** has failed.
 
-            You can check the failure details at:
+            Repository: **${{ github.repository }}**
+            Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Please check the logs of the failed job for details:
             🔗 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-            Error summary:
-            ```
-            $(cat error_info.txt)
-            ```
+            Failed Job: ${{ github.job }}
 
             Regards,
             GitHub Actions
