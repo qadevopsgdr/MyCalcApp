@@ -1,4 +1,4 @@
-name: Calc App GitHub Actions
+name: Calc App GitHub Actions ..
 
 on:
   push:
