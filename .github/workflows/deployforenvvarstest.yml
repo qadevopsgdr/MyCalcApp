@@ -1,4 +1,4 @@
-name: Calc App GitHub Actions (.env version)
+name: Calc App GitHub Actions (DOTENV_FILE version)
 
 on:
   push:
@@ -14,13 +14,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # 2. Load environment variables from .env file
-      - name: Load environment variables
+      # 2. Load environment variables from DOTENV_FILE secret
+      - name: Load environment variables from secret
         id: dotenv
         run: |
-          echo "Loading .env variables..."
+          echo "Loading environment variables from DOTENV_FILE secret..."
+          echo "${{ secrets.DOTENV_FILE }}" > temp.env
           set -o allexport
-          source .env
+          source temp.env
           set +o allexport
           echo "AWS_ACCESS_KEY_ID=$ACCESS_KEY" >> $GITHUB_ENV
           echo "AWS_SECRET_ACCESS_KEY=$SECRET_ACCESS_KEY" >> $GITHUB_ENV
