@@ -1,4 +1,4 @@
-name: Calc App GitHub Actions
+name: Calc App GitHub Actions ... Access key secret access key from env file
 
 on:
   push:
