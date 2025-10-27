@@ -1,4 +1,4 @@
-name: Calc App GitHub Actions ... Access key secret access key from env file.
+name: Calc App GitHub Actions (.env version)
 
 on:
   push:
@@ -10,35 +10,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout the repo
+      # 1. Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # 2. Configure AWS credentials
+      # 2. Load environment variables from .env file
+      - name: Load environment variables
+        id: dotenv
+        run: |
+          echo "Loading .env variables..."
+          set -o allexport
+          source .env
+          set +o allexport
+          echo "AWS_ACCESS_KEY_ID=$ACCESS_KEY" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=$SECRET_ACCESS_KEY" >> $GITHUB_ENV
+          echo "AWS_REGION=$REGION" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
+      # 3. Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.REGION }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      # 3. Login to ECR
+      # 4. Login to Amazon ECR
       - name: Login to Amazon ECR
         run: |
-         # aws ecr get-login-password --region ${{ secrets.REGION }} | docker login --username AWS --password-stdin ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com
-          aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 557690603016.dkr.ecr.ap-south-1.amazonaws.com
-      # 4. Build Docker image
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+      # 5. Build Docker image
       - name: Build Docker image
-      #   run: docker build -t calc-gh .
         run: docker build -t calc-gh .
 
-      # 5. Tag Docker image for ECR
+      # 6. Tag Docker image
       - name: Tag Docker image
         run: |
-         # docker tag calc-gh:latest ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/gh-calc:latest
-          docker tag calc-gh:latest 557690603016.dkr.ecr.ap-south-1.amazonaws.com/calc-gh:latest
+          docker tag calc-gh:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/calc-gh:latest
 
-      # 6. Push Docker image to ECR
+      # 7. Push Docker image to ECR
       - name: Push Docker image
         run: |
-         docker push ${{ secrets.ACCOUNT_ID }}.dkr.ecr.${{ secrets.REGION }}.amazonaws.com/calc-gh:latest
+          docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/calc-gh:latest
